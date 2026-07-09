@@ -32,6 +32,8 @@ from models.model import UploadFile
 
 logger = logging.getLogger(__name__)
 
+MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
 
 class WordExtractor(BaseExtractor):
     """Load docx files.
@@ -286,7 +288,168 @@ class WordExtractor(BaseExtractor):
                     if run.text:
                         paragraph_content.append(run.text)
 
+            elif tag == qn("m:oMath"):
+                math_text = self._parse_omml(child)
+                if math_text:
+                    paragraph_content.append(f" ${math_text}$ ")
+
+            elif tag == qn("m:oMathPara"):
+                for sub_child in child:
+                    if sub_child.tag == qn("m:oMath"):
+                        math_text = self._parse_omml(sub_child)
+                        if math_text:
+                            paragraph_content.append(f" $${math_text}$$ ")
+
         return "".join(paragraph_content).strip()
+
+    def _parse_omml(self, element: object) -> str:
+        if not hasattr(element, "tag"):
+            return ""
+        tag = str(element.tag).split("}")[-1]
+
+        if tag == "r":
+            t_el = element.find(f".//{{{MATH_NS}}}t")
+            if t_el is not None and t_el.text:
+                return t_el.text
+            return ""
+
+        elif tag == "f":
+            num_el = element.find(f"./{{{MATH_NS}}}num")
+            den_el = element.find(f"./{{{MATH_NS}}}den")
+            num_str = self._parse_children(num_el) if num_el is not None else ""
+            den_str = self._parse_children(den_el) if den_el is not None else ""
+            return f"\\frac{{{num_str}}}{{{den_str}}}"
+
+        elif tag in ("sSub", "sub"):
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+            sub_el = element.find(f"./{{{MATH_NS}}}sub")
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+            sub_str = self._parse_children(sub_el) if sub_el is not None else ""
+            if e_str or sub_str:
+                return f"{{{e_str}}}_{{{sub_str}}}"
+            return ""
+
+        elif tag in ("sSup", "sup"):
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+            sup_el = element.find(f"./{{{MATH_NS}}}sup")
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+            sup_str = self._parse_children(sup_el) if sup_el is not None else ""
+            if e_str or sup_str:
+                return f"{{{e_str}}}^{{{sup_str}}}"
+            return ""
+
+        elif tag in ("sSubSup", "subSup"):
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+            sub_el = element.find(f"./{{{MATH_NS}}}sub")
+            sup_el = element.find(f"./{{{MATH_NS}}}sup")
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+            sub_str = self._parse_children(sub_el) if sub_el is not None else ""
+            sup_str = self._parse_children(sup_el) if sup_el is not None else ""
+            if e_str or sub_str or sup_str:
+                return f"{{{e_str}}}_{{{sub_str}}}^{{{sup_str}}}"
+            return ""
+
+        elif tag == "rad":
+            deg_el = element.find(f"./{{{MATH_NS}}}deg")
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+            if deg_el is not None:
+                deg_str = self._parse_children(deg_el)
+                if deg_str:
+                    return f"\\sqrt[{deg_str}]{{{e_str}}}"
+            return f"\\sqrt{{{e_str}}}"
+
+        elif tag == "d":
+            beg_chr = "("
+            end_chr = ")"
+            dPr = element.find(f"./{{{MATH_NS}}}dPr")
+            if dPr is not None:
+                beg_chr_el = dPr.find(f"./{{{MATH_NS}}}begChr")
+                end_chr_el = dPr.find(f"./{{{MATH_NS}}}endChr")
+                if beg_chr_el is not None and beg_chr_el.get(f"{{{MATH_NS}}}val"):
+                    beg_chr = str(beg_chr_el.get(f"{{{MATH_NS}}}val"))
+                elif beg_chr_el is not None and beg_chr_el.text:
+                    beg_chr = beg_chr_el.text
+                if end_chr_el is not None and end_chr_el.get(f"{{{MATH_NS}}}val"):
+                    end_chr = str(end_chr_el.get(f"{{{MATH_NS}}}val"))
+                elif end_chr_el is not None and end_chr_el.text:
+                    end_chr = end_chr_el.text
+
+            if beg_chr == "{":
+                beg_chr = "\\{"
+            if end_chr == "}":
+                end_chr = "\\}"
+
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+            return f"\\left{beg_chr} {e_str} \\right{end_chr}"
+
+        elif tag == "limLow":
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+            lim_el = element.find(f"./{{{MATH_NS}}}lim")
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+            lim_str = self._parse_children(lim_el) if lim_el is not None else ""
+            return f"\\lim_{{{lim_str}}} {{{e_str}}}"
+
+        elif tag == "limUpp":
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+            lim_el = element.find(f"./{{{MATH_NS}}}lim")
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+            lim_str = self._parse_children(lim_el) if lim_el is not None else ""
+            return f"\\lim^{{{lim_str}}} {{{e_str}}}"
+
+        elif tag == "nary":
+            chr_val = ""
+            naryPr = element.find(f"./{{{MATH_NS}}}naryPr")
+            if naryPr is not None:
+                chr_el = naryPr.find(f"./{{{MATH_NS}}}chr")
+                if chr_el is not None and chr_el.get(f"{{{MATH_NS}}}val"):
+                    chr_val = str(chr_el.get(f"{{{MATH_NS}}}val"))
+
+            operator_map = {
+                "∫": "\\int",
+                "∑": "\\sum",
+                "∏": "\\prod",
+            }
+            latex_op = operator_map.get(chr_val, chr_val)
+
+            sub_el = element.find(f"./{{{MATH_NS}}}sub")
+            sup_el = element.find(f"./{{{MATH_NS}}}sup")
+            e_el = element.find(f"./{{{MATH_NS}}}e")
+
+            sub_str = f"_{{{self._parse_children(sub_el)}}}" if sub_el is not None else ""
+            sup_str = f"^{{{self._parse_children(sup_el)}}}" if sup_el is not None else ""
+            e_str = self._parse_children(e_el) if e_el is not None else ""
+
+            return f"{latex_op}{sub_str}{sup_str} {e_str}"
+
+        elif tag == "m":
+            mr_els = element.findall(f"./{{{MATH_NS}}}mr")
+            rows_str = []
+            for mr in mr_els:
+                cells = mr.findall(f"./{{{MATH_NS}}}e")
+                row_cells_str = [self._parse_children(cell) for cell in cells]
+                rows_str.append(" & ".join(row_cells_str))
+            matrix_content = " \\\\ \n".join(rows_str)
+            return f"\\begin{{matrix}} {matrix_content} \\end{{matrix}}"
+
+        else:
+            return self._parse_children(element)
+
+    def _parse_children(self, element: object) -> str:
+        if element is None:
+            return ""
+        parts = []
+        if hasattr(element, "text") and element.text:
+            parts.append(element.text)
+        try:
+            for child in element:
+                parts.append(self._parse_omml(child))
+                if hasattr(child, "tail") and child.tail:
+                    parts.append(child.tail)
+        except TypeError:
+            pass
+        return "".join(parts)
 
     def parse_docx(self, docx_path: str) -> str:
         doc = DocxDocument(docx_path)
@@ -445,6 +608,16 @@ class WordExtractor(BaseExtractor):
                     process_run(run, target_buffer)
                 elif tag == qn("w:hyperlink"):
                     process_hyperlink(child, paragraph_content)
+                elif tag == qn("m:oMath"):
+                    math_text = self._parse_omml(child)
+                    if math_text:
+                        paragraph_content.append(f" ${math_text}$ ")
+                elif tag == qn("m:oMathPara"):
+                    for sub_child in child:
+                        if sub_child.tag == qn("m:oMath"):
+                            math_text = self._parse_omml(sub_child)
+                            if math_text:
+                                paragraph_content.append(f" $${math_text}$$ ")
             return "".join(paragraph_content) if paragraph_content else ""
 
         for block in doc.iter_inner_content():

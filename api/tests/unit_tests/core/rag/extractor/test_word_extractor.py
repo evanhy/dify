@@ -803,3 +803,60 @@ def test_parse_cell_paragraph_hyperlink_in_table_cell_mailto():
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+
+def test_extract_equations(monkeypatch: pytest.MonkeyPatch):
+    # Mock db and storage
+    monkeypatch.setattr(we, "storage", SimpleNamespace(save=lambda k, d: None))
+    db_stub = SimpleNamespace(session=SimpleNamespace(add=lambda o: None, commit=lambda: None))
+    monkeypatch.setattr(we, "db", db_stub)
+    monkeypatch.setattr(we.dify_config, "FILES_URL", "http://files.local", raising=False)
+    monkeypatch.setattr(we.dify_config, "STORAGE_TYPE", "local", raising=False)
+
+    from docx.oxml import parse_xml
+
+    doc = Document()
+    p = doc.add_paragraph("Equation inline: ")
+
+    # oMath XML snippet
+    omml_xml = (
+        '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+        '<m:r><m:t>E</m:t></m:r>'
+        '<m:r><m:t>=</m:t></m:r>'
+        '<m:r><m:t>m</m:t></m:r>'
+        '<m:sSup>'
+        '<m:e><m:r><m:t>c</m:t></m:r></m:e>'
+        '<m:sup><m:r><m:t>2</m:t></m:r></m:sup>'
+        '</m:sSup>'
+        '</m:oMath>'
+    )
+    p._p.append(parse_xml(omml_xml))
+
+    # oMathPara XML snippet
+    p2 = doc.add_paragraph("Equation block: ")
+    omml_para_xml = (
+        '<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+        '<m:oMath>'
+        '<m:f>'
+        '<m:num><m:r><m:t>a</m:t></m:r></m:num>'
+        '<m:den><m:r><m:t>b</m:t></m:r></m:den>'
+        '</m:f>'
+        '</m:oMath>'
+        '</m:oMathPara>'
+    )
+    p2._p.append(parse_xml(omml_para_xml))
+
+    with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+        doc.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        extractor = WordExtractor(tmp_path, "tenant_id", "user_id")
+        docs = extractor.extract()
+        content = docs[0].page_content
+        assert "Equation inline: $E=m{c}^{2}$" in content
+        assert "Equation block: $$\\frac{a}{b}$$" in content
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
