@@ -15,8 +15,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN pnpm config set registry https://registry.npmmirror.com \
     && pnpm config set fetch-retries 10 \
     && pnpm config set fetch-retry-mintimeout 20000 \
-    && pnpm config set network-concurrency 5 \
-    && pnpm config set shamefully-hoist true
+    && pnpm config set network-concurrency 5
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH="$NEXT_PUBLIC_BASE_PATH"
 
