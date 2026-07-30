@@ -10,7 +10,7 @@ const projectRoot = fileURLToPath(new URL('.', import.meta.url))
 const isDev = process.env.NODE_ENV === 'development'
 const withMDX = createMDX()
 const allowedDevOrigins = process.env.NEXT_ALLOWED_DEV_ORIGINS?.split(',')
-  .map(origin => origin.trim())
+  .map((origin) => origin.trim())
   .filter(Boolean)
 
 const nextConfig: NextConfig = {
@@ -43,7 +43,7 @@ const nextConfig: NextConfig = {
   async headers() {
     const antiFrame = [
       { key: 'X-Frame-Options', value: 'DENY' },
-      { key: 'Content-Security-Policy', value: 'frame-ancestors \'none\'' },
+      { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
     ]
     return [
       { source: '/device', headers: antiFrame },
