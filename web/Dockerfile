@@ -12,7 +12,7 @@ RUN apk add --no-cache tzdata
 RUN corepack enable
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN pnpm config set fetch-retries 10 && pnpm config set fetch-retry-mintimeout 20000 && pnpm config set network-concurrency 5
+RUN pnpm config set registry https://registry.npmmirror.com && pnpm config set fetch-retries 10 && pnpm config set fetch-retry-mintimeout 20000 && pnpm config set network-concurrency 5
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH="$NEXT_PUBLIC_BASE_PATH"
 
@@ -26,6 +26,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
 COPY web/package.json /app/web/
 COPY e2e/package.json /app/e2e/
 COPY sdks/nodejs-client/package.json /app/sdks/nodejs-client/
+COPY cli/package.json /app/cli/
 COPY packages /app/packages
 
 # Use packageManager from package.json
