@@ -22,7 +22,7 @@ function createDataSourceData(overrides: Partial<DataSourceNodeType> = {}): Data
     desc: '',
     type: BlockEnum.DataSource,
     plugin_id: 'plugin-ds-1',
-    provider_type: 'local_file',
+    provider_type: 'online_document',
     datasource_name: 'mysql_query',
     datasource_parameters: {},
     datasource_configurations: {},
@@ -83,6 +83,16 @@ describe('getDataSourceCheckParams', () => {
     const result = getDataSourceCheckParams(
       createDataSourceData(),
       [createDataSourceCollection({ is_authorized: true })],
+      'en_US',
+    )
+
+    expect(result.notAuthed).toBe(false)
+  })
+
+  it('should not require authorization for local_file datasource', () => {
+    const result = getDataSourceCheckParams(
+      createDataSourceData({ provider_type: 'local_file' }),
+      [createDataSourceCollection({ is_authorized: false })],
       'en_US',
     )
 
